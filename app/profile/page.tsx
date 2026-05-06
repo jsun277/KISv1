@@ -1,26 +1,32 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { createClient } from "@/lib/supabase/server";
-import { LogForm } from "./log-form";
+import type { Profile } from "@/lib/types";
+import { ProfileForm } from "./profile-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function LogPage() {
+type SearchParams = Promise<{ next?: string; error?: string }>;
+
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data } = await supabase
     .from("profiles")
-    .select("user_id")
+    .select("*")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!profile) {
-    redirect("/profile?next=/log");
-  }
+  const profile = (data ?? null) as Profile | null;
 
   return (
     <>
@@ -28,13 +34,19 @@ export default async function LogPage() {
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6">
         <div className="mb-6 space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
-            New impact log
+            Athlete profile
           </h1>
           <p className="text-sm text-zinc-500">
-            Tap to fill in. Big buttons by design — works after a hard session.
+            {profile
+              ? "Update how the agent reads your impacts."
+              : "Tell the agent what you do — it shapes how risk is read."}
           </p>
         </div>
-        <LogForm />
+        <ProfileForm
+          profile={profile}
+          next={params.next}
+          errorMessage={params.error}
+        />
       </main>
     </>
   );

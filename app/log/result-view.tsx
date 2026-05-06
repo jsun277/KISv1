@@ -1,9 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { AlertOctagon, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ImpactLog, SeverityColor } from "@/lib/types";
+
+const ICONS: Record<SeverityColor, typeof AlertOctagon> = {
+  Green: CheckCircle2,
+  Yellow: AlertTriangle,
+  Red: AlertOctagon,
+};
 
 const tone: Record<
   SeverityColor,
@@ -41,6 +48,7 @@ export function ResultView({
 }) {
   const t = tone[log.analysis.severity_color];
   const score = log.analysis.risk_score;
+  const Icon = ICONS[log.analysis.severity_color];
 
   return (
     <div className="space-y-6">
@@ -48,7 +56,12 @@ export function ResultView({
         <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
           Logged · analysis complete
         </div>
-        <div className={`mt-2 text-3xl font-semibold ${t.text}`}>{t.label}</div>
+        <div
+          className={`mt-2 flex items-center gap-2 text-3xl font-semibold ${t.text}`}
+        >
+          <Icon className="size-7" aria-hidden />
+          {t.label}
+        </div>
         <div className="mt-1 text-sm text-zinc-700">{log.analysis.insight}</div>
 
         <div className="mt-5">

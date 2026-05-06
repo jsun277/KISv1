@@ -4,10 +4,21 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertOctagon,
+  AlertTriangle,
+  Brain,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  X,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -49,6 +60,12 @@ const SEVERITY_RANK: Record<SeverityColor, number> = {
   Green: 0,
   Yellow: 1,
   Red: 2,
+};
+
+const SEVERITY_ICONS: Record<SeverityColor, typeof AlertOctagon> = {
+  Green: CheckCircle2,
+  Yellow: AlertTriangle,
+  Red: AlertOctagon,
 };
 
 const MONTH_NAMES = [
@@ -135,8 +152,12 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
           <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
           <p className="text-sm text-zinc-500">Your impact history.</p>
         </div>
-        <Link href="/log" className={buttonVariants({ size: "sm" })}>
-          + New log
+        <Link
+          href="/log"
+          className={`${buttonVariants({ size: "sm" })} gap-1`}
+        >
+          <Plus className="size-3.5" />
+          New log
         </Link>
       </div>
 
@@ -144,7 +165,9 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
 
       <StatsStrip stats={stats} />
 
-      <TrendCard logs={logs} />
+      <BrainLoadCard logs={logs} brainLoad={stats.brainLoad} />
+
+      <SymptomFrequencyCard logs={logs} />
 
       <CalendarCard
         view={view}
@@ -209,12 +232,16 @@ function StatusCard({ latest }: { latest: ImpactLog | undefined }) {
     );
   }
   const s = severityStyles[latest.analysis.severity_color];
+  const Icon = SEVERITY_ICONS[latest.analysis.severity_color];
   return (
     <div
       className={`rounded-lg border border-zinc-200 border-l-4 ${s.border} ${s.bg} px-5 py-6`}
     >
       <div className="text-sm text-zinc-500">Current status</div>
-      <div className={`mt-1 text-xl font-semibold ${s.text}`}>{s.label}</div>
+      <div className={`mt-1 flex items-center gap-2 text-xl font-semibold ${s.text}`}>
+        <Icon className="size-5" aria-hidden />
+        {s.label}
+      </div>
       <div className="mt-3 text-sm text-zinc-700">
         {latest.analysis.insight}
       </div>
@@ -235,9 +262,8 @@ function StatsStrip({ stats }: { stats: Stats }) {
       sub: stats.thisMonth ? `${stats.thisMonth} this month` : undefined,
     },
     {
-      label: "Avg score (30d)",
-      value: stats.avg30d != null ? stats.avg30d.toFixed(1) : "—",
-      sub: "/ 10",
+      label: "Brain Load (7d)",
+      value: stats.brainLoad.toFixed(1),
     },
     {
       label: "Red days (30d)",
@@ -277,31 +303,30 @@ function StatsStrip({ stats }: { stats: Stats }) {
   );
 }
 
-function TrendCard({ logs }: { logs: ImpactLog[] }) {
-  const data = useMemo(() => {
-    return [...logs]
-      .reverse()
-      .slice(-30)
-      .map((l) => ({
-        ts: new Date(l.created_at).getTime(),
-        score: l.analysis.risk_score,
-        date: new Date(l.created_at).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        }),
-        color: l.analysis.severity_color,
-      }));
-  }, [logs]);
+function BrainLoadCard({
+  logs,
+  brainLoad,
+}: {
+  logs: ImpactLog[];
+  brainLoad: number;
+}) {
+  const data = useMemo(() => buildBrainLoadSeries(logs), [logs]);
+  const hasAnyLoad = data.some((d) => d.load > 0);
 
   return (
     <section className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-medium">Risk trend</h2>
-        <span className="text-xs text-zinc-500">last {data.length} logs</span>
+        <div className="flex items-center gap-2">
+          <Brain className="size-4 text-zinc-700" aria-hidden />
+          <h2 className="text-sm font-medium">Brain Load</h2>
+        </div>
+        <span className="text-xs text-zinc-500">
+          7-day rolling, time-decayed · current {brainLoad.toFixed(1)}
+        </span>
       </div>
-      {data.length < 2 ? (
+      {!hasAnyLoad ? (
         <div className="flex h-40 items-center justify-center text-sm text-zinc-400">
-          Need at least 2 logs to show a trend.
+          No impacts in the last 7 days.
         </div>
       ) : (
         <div className="h-48 w-full">
@@ -316,29 +341,15 @@ function TrendCard({ logs }: { logs: ImpactLog[] }) {
                 vertical={false}
               />
               <XAxis
-                dataKey="date"
+                dataKey="day"
                 tick={{ fontSize: 10, fill: "#71717a" }}
                 stroke="#e4e4e7"
-                interval="preserveStartEnd"
               />
               <YAxis
-                domain={[0, 10]}
-                ticks={[0, 4, 7, 10]}
                 tick={{ fontSize: 10, fill: "#71717a" }}
                 stroke="#e4e4e7"
                 width={28}
-              />
-              <ReferenceLine
-                y={4}
-                stroke="#f59e0b"
-                strokeDasharray="3 3"
-                strokeOpacity={0.6}
-              />
-              <ReferenceLine
-                y={7}
-                stroke="#ef4444"
-                strokeDasharray="3 3"
-                strokeOpacity={0.6}
+                allowDecimals={false}
               />
               <Tooltip
                 contentStyle={{
@@ -346,11 +357,14 @@ function TrendCard({ logs }: { logs: ImpactLog[] }) {
                   borderRadius: 8,
                   border: "1px solid #e4e4e7",
                 }}
-                formatter={(v) => [`${v}/10`, "Risk"]}
+                formatter={(v) => {
+                  const num = typeof v === "number" ? v : Number(v);
+                  return [num.toFixed(1), "Brain Load"];
+                }}
               />
               <Line
                 type="monotone"
-                dataKey="score"
+                dataKey="load"
                 stroke="#18181b"
                 strokeWidth={2}
                 dot={{ r: 3, fill: "#18181b" }}
@@ -358,6 +372,69 @@ function TrendCard({ logs }: { logs: ImpactLog[] }) {
                 isAnimationActive={false}
               />
             </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SymptomFrequencyCard({ logs }: { logs: ImpactLog[] }) {
+  const data = useMemo(() => buildSymptomFrequency(logs), [logs]);
+
+  return (
+    <section className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-medium">Top symptoms (7d)</h2>
+        <span className="text-xs text-zinc-500">
+          {data.length === 0 ? "no symptoms reported" : `top ${data.length}`}
+        </span>
+      </div>
+      {data.length === 0 ? (
+        <div className="flex h-32 items-center justify-center text-sm text-zinc-400">
+          No symptoms in the last 7 days.
+        </div>
+      ) : (
+        <div className="h-48 w-full">
+          <ResponsiveContainer>
+            <BarChart
+              data={data}
+              layout="vertical"
+              margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+            >
+              <CartesianGrid
+                stroke="#e4e4e7"
+                strokeDasharray="3 3"
+                horizontal={false}
+              />
+              <XAxis
+                type="number"
+                tick={{ fontSize: 10, fill: "#71717a" }}
+                stroke="#e4e4e7"
+                allowDecimals={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="symptom"
+                tick={{ fontSize: 11, fill: "#3f3f46" }}
+                stroke="#e4e4e7"
+                width={140}
+              />
+              <Tooltip
+                contentStyle={{
+                  fontSize: 12,
+                  borderRadius: 8,
+                  border: "1px solid #e4e4e7",
+                }}
+                formatter={(v) => [v, "Count"]}
+              />
+              <Bar
+                dataKey="count"
+                fill="#18181b"
+                radius={[0, 4, 4, 0]}
+                isAnimationActive={false}
+              />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       )}
@@ -394,10 +471,10 @@ function CalendarCard({
         <button
           type="button"
           onClick={onPrev}
-          className="rounded-md px-2 py-1 text-zinc-600 hover:bg-zinc-100"
+          className="rounded-md p-1.5 text-zinc-600 hover:bg-zinc-100"
           aria-label="Previous month"
         >
-          ‹
+          <ChevronLeft className="size-4" />
         </button>
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-medium">
@@ -414,10 +491,10 @@ function CalendarCard({
         <button
           type="button"
           onClick={onNext}
-          className="rounded-md px-2 py-1 text-zinc-600 hover:bg-zinc-100"
+          className="rounded-md p-1.5 text-zinc-600 hover:bg-zinc-100"
           aria-label="Next month"
         >
-          ›
+          <ChevronRight className="size-4" />
         </button>
       </div>
 
@@ -539,11 +616,11 @@ function LogCard({
             type="button"
             onClick={() => onDelete(log.id)}
             disabled={isDeleting}
-            className="rounded-md px-1.5 py-1 text-xs text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
             aria-label="Delete log"
             title="Delete log"
           >
-            ✕
+            <X className="size-3.5" />
           </button>
         </div>
       </div>
@@ -578,7 +655,7 @@ function Legend({ tone, label }: { tone: string; label: string }) {
 type Stats = {
   total: number;
   thisMonth: number;
-  avg30d: number | null;
+  brainLoad: number;
   redDays30d: number;
   daysSinceLast: number | null;
 };
@@ -588,28 +665,31 @@ function computeStats(logs: ImpactLog[], now: Date): Stats {
     return {
       total: 0,
       thisMonth: 0,
-      avg30d: null,
+      brainLoad: 0,
       redDays30d: 0,
       daysSinceLast: null,
     };
   }
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
   const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
   let thisMonth = 0;
-  let sum30 = 0;
-  let count30 = 0;
+  let brainLoad = 0;
   const redDays = new Set<string>();
 
   for (const l of logs) {
     const t = new Date(l.created_at).getTime();
     if (t >= startOfMonth) thisMonth++;
-    if (t >= thirtyDaysAgo) {
-      sum30 += l.analysis.risk_score;
-      count30++;
-      if (l.analysis.severity_color === "Red") {
-        redDays.add(dateKey(new Date(l.created_at)));
-      }
+
+    const ageMs = now.getTime() - t;
+    if (ageMs < sevenDaysMs && ageMs >= 0) {
+      const daysAgo = ageMs / (24 * 60 * 60 * 1000);
+      brainLoad += l.analysis.risk_score / (1 + daysAgo);
+    }
+
+    if (t >= thirtyDaysAgo && l.analysis.severity_color === "Red") {
+      redDays.add(dateKey(new Date(l.created_at)));
     }
   }
 
@@ -621,10 +701,56 @@ function computeStats(logs: ImpactLog[], now: Date): Stats {
   return {
     total: logs.length,
     thisMonth,
-    avg30d: count30 > 0 ? sum30 / count30 : null,
+    brainLoad: Math.round(brainLoad * 10) / 10,
     redDays30d: redDays.size,
     daysSinceLast,
   };
+}
+
+function buildBrainLoadSeries(logs: ImpactLog[]) {
+  // For each of the last 7 days, compute the rolling Brain Load AS OF the
+  // end of that day. This shows how the load has been trending.
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+
+  const points: { day: string; load: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const dayEnd = new Date(today);
+    dayEnd.setDate(today.getDate() - i);
+
+    let load = 0;
+    for (const log of logs) {
+      const ts = new Date(log.created_at).getTime();
+      if (ts > dayEnd.getTime()) continue;
+      const ageDays = (dayEnd.getTime() - ts) / (24 * 60 * 60 * 1000);
+      if (ageDays >= 7) continue;
+      load += log.analysis.risk_score / (1 + ageDays);
+    }
+
+    points.push({
+      day: dayEnd.toLocaleDateString(undefined, {
+        weekday: "short",
+        day: "numeric",
+      }),
+      load: Math.round(load * 10) / 10,
+    });
+  }
+  return points;
+}
+
+function buildSymptomFrequency(logs: ImpactLog[]) {
+  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const counts = new Map<string, number>();
+  for (const log of logs) {
+    if (new Date(log.created_at).getTime() < sevenDaysAgo) continue;
+    for (const sym of log.analysis.symptoms) {
+      counts.set(sym, (counts.get(sym) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([symptom, count]) => ({ symptom, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
 }
 
 function dateKey(d: Date) {

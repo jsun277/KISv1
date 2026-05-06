@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { signIn, signUp } from "./actions";
+import { SubmitButton } from "./submit-button";
 
 type SearchParams = Promise<{ mode?: string; error?: string }>;
 
@@ -80,9 +80,7 @@ export default async function LoginPage({
             </p>
           ) : null}
 
-          <Button type="submit" className="w-full h-11 text-base">
-            {mode === "signup" ? "Create account" : "Sign in"}
-          </Button>
+          <SubmitButton label={mode === "signup" ? "Create account" : "Sign in"} />
         </form>
       </div>
     </main>
