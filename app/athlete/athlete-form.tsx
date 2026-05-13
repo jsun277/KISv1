@@ -7,49 +7,44 @@ import { Label } from "@/components/ui/label";
 import {
   SPORTS,
   SPORT_LABELS,
-  SUB_TYPE_LABELS,
-  SUB_TYPES_BY_SPORT,
-  type Profile,
+  type Athlete,
   type Sport,
-  type SubType,
 } from "@/lib/types";
-import { saveProfile } from "./actions";
+import { saveAthlete } from "./actions";
 
 const tile =
   "rounded-xl border-2 text-base font-medium transition active:scale-[0.98]";
 const tileIdle = "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300";
 const tileActive = "border-zinc-900 bg-zinc-900 text-white shadow-sm";
 
-export function ProfileForm({
-  profile,
+export function AthleteForm({
+  athlete,
   next,
   errorMessage,
 }: {
-  profile: Profile | null;
+  athlete: Athlete | null;
   next?: string;
   errorMessage?: string;
 }) {
-  const [sport, setSport] = useState<Sport | null>(profile?.sport ?? null);
-  const [subType, setSubType] = useState<SubType | null>(
-    profile?.sub_type ?? null,
-  );
-
-  const validSubTypes = sport ? SUB_TYPES_BY_SPORT[sport] : [];
-  const subTypeValid =
-    subType !== null && validSubTypes.includes(subType);
-
-  const onPickSport = (s: Sport) => {
-    setSport(s);
-    if (subType && !SUB_TYPES_BY_SPORT[s].includes(subType)) {
-      setSubType(null);
-    }
-  };
+  const [sport, setSport] = useState<Sport | null>(athlete?.sport ?? null);
 
   return (
-    <form action={saveProfile} className="space-y-8">
+    <form action={saveAthlete} className="space-y-8">
       {next ? <input type="hidden" name="next" value={next} /> : null}
       <input type="hidden" name="sport" value={sport ?? ""} />
-      <input type="hidden" name="sub_type" value={subType ?? ""} />
+
+      <div className="space-y-2">
+        <Label htmlFor="full_name">Full name</Label>
+        <input
+          id="full_name"
+          name="full_name"
+          type="text"
+          required
+          defaultValue={athlete?.full_name ?? ""}
+          placeholder="Jane Doe"
+          className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
+        />
+      </div>
 
       <Section label="Sport">
         <div className="grid grid-cols-2 gap-3">
@@ -57,7 +52,7 @@ export function ProfileForm({
             <button
               key={s}
               type="button"
-              onClick={() => onPickSport(s)}
+              onClick={() => setSport(s)}
               className={`${tile} h-20 ${sport === s ? tileActive : tileIdle}`}
             >
               {SPORT_LABELS[s]}
@@ -66,35 +61,40 @@ export function ProfileForm({
         </div>
       </Section>
 
-      {sport ? (
-        <Section label="Primary context">
-          <div className="grid grid-cols-3 gap-3">
-            {validSubTypes.map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => setSubType(st)}
-                className={`${tile} h-16 px-2 text-sm ${
-                  subType === st ? tileActive : tileIdle
-                }`}
-              >
-                {SUB_TYPE_LABELS[st]}
-              </button>
-            ))}
-          </div>
-        </Section>
-      ) : null}
-
       <div className="space-y-2">
         <Label htmlFor="weight_class">Weight class (optional)</Label>
         <input
           id="weight_class"
           name="weight_class"
           type="text"
-          defaultValue={profile?.weight_class ?? ""}
+          defaultValue={athlete?.weight_class ?? ""}
           placeholder="e.g. 175 lbs, Heavyweight, OL"
           className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
         />
+        <p className="text-xs text-zinc-500">
+          Used to scale Peak G estimates — &ldquo;heavyweight&rdquo; and weights
+          ≥200 lbs / 90 kg trigger a 1.2× scalar.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="baseline_threshold">
+          Baseline HIT<sub>sp</sub> threshold
+        </Label>
+        <input
+          id="baseline_threshold"
+          name="baseline_threshold"
+          type="number"
+          min={1}
+          step={1}
+          required
+          defaultValue={athlete?.baseline_threshold ?? 1000}
+          className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950"
+        />
+        <p className="text-xs text-zinc-500">
+          The cumulative HIT<sub>sp</sub> ceiling at which the system flags
+          mandatory rest. Default 1000 — tune to the athlete&apos;s tolerance.
+        </p>
       </div>
 
       {errorMessage ? (
@@ -104,14 +104,9 @@ export function ProfileForm({
       ) : null}
 
       <SubmitButton
-        disabled={!sport || !subTypeValid}
-        label={profile ? "Update profile" : "Save profile"}
+        disabled={!sport}
+        label={athlete ? "Update athlete" : "Create athlete"}
       />
-
-      <p className="text-center text-xs text-zinc-400">
-        Sport context shapes how the agent reads your impacts. You can change it
-        anytime.
-      </p>
     </form>
   );
 }

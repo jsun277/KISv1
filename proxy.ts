@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/log", "/dashboard"];
+const PROTECTED_PREFIXES = ["/log", "/dashboard", "/athlete", "/join"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -44,7 +44,7 @@ export async function proxy(request: NextRequest) {
 
   if (path === "/login" && user) {
     const url = request.nextUrl.clone();
-    url.pathname = "/log";
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 

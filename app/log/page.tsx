@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Header } from "@/components/header";
 import { createClient } from "@/lib/supabase/server";
+import { getActiveAthlete } from "@/lib/active-athlete";
 import { LogForm } from "./log-form";
 
 export const dynamic = "force-dynamic";
@@ -12,14 +13,13 @@ export default async function LogPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("user_id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    redirect("/profile?next=/log");
+  const { athlete, role } = await getActiveAthlete();
+  if (!athlete) {
+    redirect("/athlete?next=/log");
+  }
+  if (role !== "owner") {
+    // Coaches can read athlete data but not log this week.
+    redirect("/dashboard");
   }
 
   return (
@@ -31,10 +31,11 @@ export default async function LogPage() {
             New impact log
           </h1>
           <p className="text-sm text-zinc-500">
-            Tap to fill in. Big buttons by design — works after a hard session.
+            Logging for <span className="font-medium">{athlete.full_name}</span>
+            . Tap to fill in.
           </p>
         </div>
-        <LogForm />
+        <LogForm athleteId={athlete.id} />
       </main>
     </>
   );

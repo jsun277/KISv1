@@ -1,10 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { AlertOctagon, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  CheckCircle2,
+  Gauge,
+  Info,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { ImpactLog, SeverityColor } from "@/lib/types";
+import {
+  IMPACT_TYPE_LABELS,
+  type ImpactLog,
+  type SeverityColor,
+} from "@/lib/types";
 
 const ICONS: Record<SeverityColor, typeof AlertOctagon> = {
   Green: CheckCircle2,
@@ -80,6 +90,32 @@ export function ResultView({
             />
           </div>
         </div>
+
+        {log.analysis.est_peak_g != null ||
+        log.analysis.hit_sp_contribution != null ? (
+          <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg bg-white/70 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                <Gauge className="size-3.5" aria-hidden />
+                Est. Peak G
+              </div>
+              <div className={`mt-0.5 text-lg font-semibold ${t.text}`}>
+                {log.analysis.est_peak_g ?? "—"}
+                <span className="text-xs font-normal text-zinc-500"> g</span>
+              </div>
+            </div>
+            <div className="rounded-lg bg-white/70 px-3 py-2">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                HIT<sub>sp</sub> contribution
+              </div>
+              <div className={`mt-0.5 text-lg font-semibold ${t.text}`}>
+                {log.analysis.hit_sp_contribution != null
+                  ? log.analysis.hit_sp_contribution.toFixed(1)
+                  : "—"}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {log.analysis.symptoms.length > 0 ? (
@@ -111,12 +147,13 @@ export function ResultView({
             log.tags.zone,
             log.tags.intensity,
             log.tags.activity,
+            log.impact_type ? IMPACT_TYPE_LABELS[log.impact_type] : null,
             ...(log.tags.feelings ?? []),
           ]
             .filter(Boolean)
-            .map((t) => (
-              <Badge key={t as string} variant="outline">
-                {t}
+            .map((tag) => (
+              <Badge key={tag as string} variant="outline">
+                {tag}
               </Badge>
             ))}
         </div>
@@ -134,9 +171,13 @@ export function ResultView({
         </Link>
       </div>
 
-      <p className="text-center text-xs text-zinc-400">
-        Informational only — not medical advice.
-      </p>
+      <div className="flex items-start gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-xs text-zinc-600">
+        <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        <span>
+          {log.analysis.disclaimer ??
+            "Informational only — not medical advice."}
+        </span>
+      </div>
     </div>
   );
 }

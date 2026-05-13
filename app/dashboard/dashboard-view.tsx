@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Gauge,
   Plus,
   X,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -26,7 +28,13 @@ import {
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import type { ImpactLog, SeverityColor } from "@/lib/types";
+import {
+  IMPACT_TYPE_LABELS,
+  type Athlete,
+  type ImpactLog,
+  type MembershipRole,
+  type SeverityColor,
+} from "@/lib/types";
 import { deleteLog } from "./actions";
 
 const severityStyles: Record<
@@ -85,7 +93,18 @@ const MONTH_NAMES = [
 
 const DAY_HEADERS = ["S", "M", "T", "W", "T", "F", "S"];
 
-export function DashboardView({ logs }: { logs: ImpactLog[] }) {
+const SUB_CONCUSSIVE_G = 60;
+const CONCUSSIVE_G = 90;
+
+export function DashboardView({
+  logs,
+  athlete,
+  viewerRole,
+}: {
+  logs: ImpactLog[];
+  athlete: Athlete;
+  viewerRole: MembershipRole;
+}) {
   const router = useRouter();
   const today = new Date();
   const [view, setView] = useState({
@@ -107,7 +126,10 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
     return m;
   }, [logs]);
 
-  const stats = useMemo(() => computeStats(logs, today), [logs]);
+  const stats = useMemo(
+    () => computeStats(logs, today, athlete.baseline_threshold),
+    [logs, athlete.baseline_threshold],
+  );
 
   const cells = useMemo(
     () => buildMonthCells(view.year, view.month),
@@ -149,21 +171,33 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
     <>
       <div className="mb-6 flex items-end justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-zinc-500">Your impact history.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {athlete.full_name}
+          </h1>
+          <p className="text-sm text-zinc-500">
+            {athlete.sport.replace("_", " ")}
+            {athlete.weight_class ? ` · ${athlete.weight_class}` : ""}
+            <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600">
+              {viewerRole}
+            </span>
+          </p>
         </div>
-        <Link
-          href="/log"
-          className={`${buttonVariants({ size: "sm" })} gap-1`}
-        >
-          <Plus className="size-3.5" />
-          New log
-        </Link>
+        {viewerRole === "owner" ? (
+          <Link
+            href="/log"
+            className={`${buttonVariants({ size: "sm" })} gap-1`}
+          >
+            <Plus className="size-3.5" />
+            New log
+          </Link>
+        ) : null}
       </div>
 
       <StatusCard latest={latest} />
 
       <StatsStrip stats={stats} />
+
+      <PeakGCard logs={logs} baselineThreshold={athlete.baseline_threshold} />
 
       <BrainLoadCard logs={logs} brainLoad={stats.brainLoad} />
 
@@ -190,7 +224,7 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
           <div className="rounded-md border border-dashed border-zinc-300 px-4 py-12 text-center text-sm text-zinc-500">
             {selected ? (
               "No logs on this day."
-            ) : (
+            ) : viewerRole === "owner" ? (
               <>
                 No logs yet.{" "}
                 <Link
@@ -201,6 +235,8 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
                 </Link>
                 .
               </>
+            ) : (
+              "This athlete has no logs yet."
             )}
           </div>
         ) : (
@@ -209,6 +245,7 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
               <LogCard
                 key={log.id}
                 log={log}
+                canDelete={viewerRole === "owner"}
                 onDelete={onDelete}
                 isDeleting={deletingId === log.id}
               />
@@ -216,6 +253,10 @@ export function DashboardView({ logs }: { logs: ImpactLog[] }) {
           </ul>
         )}
       </div>
+
+      <p className="mt-8 text-center text-xs text-zinc-400">
+        Peak G estimates are model-derived, not measured. Informational only.
+      </p>
     </>
   );
 }
@@ -238,15 +279,32 @@ function StatusCard({ latest }: { latest: ImpactLog | undefined }) {
       className={`rounded-lg border border-zinc-200 border-l-4 ${s.border} ${s.bg} px-5 py-6`}
     >
       <div className="text-sm text-zinc-500">Current status</div>
-      <div className={`mt-1 flex items-center gap-2 text-xl font-semibold ${s.text}`}>
+      <div
+        className={`mt-1 flex items-center gap-2 text-xl font-semibold ${s.text}`}
+      >
         <Icon className="size-5" aria-hidden />
         {s.label}
       </div>
       <div className="mt-3 text-sm text-zinc-700">
         {latest.analysis.insight}
       </div>
-      <div className="mt-3 flex items-center gap-3 text-xs text-zinc-500">
-        <span>Risk score: {latest.analysis.risk_score}/10</span>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+        <span>Risk: {latest.analysis.risk_score}/10</span>
+        {latest.analysis.est_peak_g != null ? (
+          <>
+            <span>·</span>
+            <span>Est. {latest.analysis.est_peak_g}g</span>
+          </>
+        ) : null}
+        {latest.analysis.hit_sp_contribution != null ? (
+          <>
+            <span>·</span>
+            <span>
+              HIT<sub>sp</sub>{" "}
+              {latest.analysis.hit_sp_contribution.toFixed(1)}
+            </span>
+          </>
+        ) : null}
         <span>·</span>
         <span>{formatDateTime(latest.created_at)}</span>
       </div>
@@ -266,8 +324,9 @@ function StatsStrip({ stats }: { stats: Stats }) {
       value: stats.brainLoad.toFixed(1),
     },
     {
-      label: "Red days (30d)",
-      value: String(stats.redDays30d),
+      label: "HIT total (7d)",
+      value: stats.hitTotal7d.toFixed(0),
+      sub: `/ ${stats.baseline}`,
     },
     {
       label: "Last log",
@@ -303,6 +362,116 @@ function StatsStrip({ stats }: { stats: Stats }) {
   );
 }
 
+function PeakGCard({
+  logs,
+  baselineThreshold,
+}: {
+  logs: ImpactLog[];
+  baselineThreshold: number;
+}) {
+  const data = useMemo(() => {
+    return [...logs]
+      .reverse()
+      .slice(-30)
+      .map((l) => ({
+        ts: new Date(l.created_at).getTime(),
+        peak_g: l.analysis.est_peak_g ?? 0,
+        date: new Date(l.created_at).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
+      }));
+  }, [logs]);
+
+  return (
+    <section className="mt-6 rounded-lg border border-zinc-200 bg-white p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Gauge className="size-4 text-zinc-700" aria-hidden />
+          <h2 className="text-sm font-medium">Estimated Peak G</h2>
+        </div>
+        <span className="text-xs text-zinc-500">
+          baseline HIT<sub>sp</sub> threshold {baselineThreshold}
+        </span>
+      </div>
+      {data.length < 2 ? (
+        <div className="flex h-40 items-center justify-center text-sm text-zinc-400">
+          Need at least 2 logs to show the trend.
+        </div>
+      ) : (
+        <div className="h-48 w-full">
+          <ResponsiveContainer>
+            <LineChart
+              data={data}
+              margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
+            >
+              <CartesianGrid
+                stroke="#e4e4e7"
+                strokeDasharray="3 3"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: "#71717a" }}
+                stroke="#e4e4e7"
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                domain={[0, "dataMax + 20"]}
+                tick={{ fontSize: 10, fill: "#71717a" }}
+                stroke="#e4e4e7"
+                width={32}
+                allowDecimals={false}
+              />
+              <ReferenceLine
+                y={SUB_CONCUSSIVE_G}
+                stroke="#f59e0b"
+                strokeDasharray="3 3"
+                strokeOpacity={0.6}
+                label={{
+                  value: `${SUB_CONCUSSIVE_G}g sub-concussive`,
+                  fontSize: 9,
+                  fill: "#b45309",
+                  position: "insideTopRight",
+                }}
+              />
+              <ReferenceLine
+                y={CONCUSSIVE_G}
+                stroke="#ef4444"
+                strokeDasharray="3 3"
+                strokeOpacity={0.6}
+                label={{
+                  value: `${CONCUSSIVE_G}g concussive`,
+                  fontSize: 9,
+                  fill: "#b91c1c",
+                  position: "insideTopRight",
+                }}
+              />
+              <Tooltip
+                contentStyle={{
+                  fontSize: 12,
+                  borderRadius: 8,
+                  border: "1px solid #e4e4e7",
+                }}
+                formatter={(v) => [`${v} g`, "Est. Peak G"]}
+              />
+              <Line
+                type="monotone"
+                dataKey="peak_g"
+                stroke="#18181b"
+                strokeWidth={2}
+                dot={{ r: 3, fill: "#18181b" }}
+                activeDot={{ r: 5 }}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function BrainLoadCard({
   logs,
   brainLoad,
@@ -321,7 +490,7 @@ function BrainLoadCard({
           <h2 className="text-sm font-medium">Brain Load</h2>
         </div>
         <span className="text-xs text-zinc-500">
-          7-day rolling, time-decayed · current {brainLoad.toFixed(1)}
+          7-day rolling · current {brainLoad.toFixed(1)}
         </span>
       </div>
       {!hasAnyLoad ? (
@@ -358,8 +527,8 @@ function BrainLoadCard({
                   border: "1px solid #e4e4e7",
                 }}
                 formatter={(v) => {
-                  const num = typeof v === "number" ? v : Number(v);
-                  return [num.toFixed(1), "Brain Load"];
+                  const n = typeof v === "number" ? v : Number(v);
+                  return [n.toFixed(1), "Brain Load"];
                 }}
               />
               <Line
@@ -574,10 +743,12 @@ function CalendarCard({
 
 function LogCard({
   log,
+  canDelete,
   onDelete,
   isDeleting,
 }: {
   log: ImpactLog;
+  canDelete: boolean;
   onDelete: (id: string) => void;
   isDeleting: boolean;
 }) {
@@ -586,6 +757,7 @@ function LogCard({
     log.tags.zone,
     log.tags.intensity,
     log.tags.activity,
+    log.impact_type ? IMPACT_TYPE_LABELS[log.impact_type] : null,
     ...(log.tags.feelings ?? []),
   ].filter(Boolean) as string[];
 
@@ -597,8 +769,13 @@ function LogCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <div className="text-xs text-zinc-500">
-            {formatDateTime(log.created_at)}
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <span>{formatDateTime(log.created_at)}</span>
+            {log.author_role === "third_party" ? (
+              <Badge variant="outline" className="text-[10px]">
+                Coach observation
+              </Badge>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {tagPills.map((t) => (
@@ -609,19 +786,26 @@ function LogCard({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`text-sm font-semibold ${s.text}`}>
-            {log.analysis.risk_score}/10
+          <div className={`text-right text-xs ${s.text}`}>
+            <div className="font-semibold">{log.analysis.risk_score}/10</div>
+            {log.analysis.est_peak_g != null ? (
+              <div className="text-[10px] text-zinc-500">
+                {log.analysis.est_peak_g}g
+              </div>
+            ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => onDelete(log.id)}
-            disabled={isDeleting}
-            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
-            aria-label="Delete log"
-            title="Delete log"
-          >
-            <X className="size-3.5" />
-          </button>
+          {canDelete ? (
+            <button
+              type="button"
+              onClick={() => onDelete(log.id)}
+              disabled={isDeleting}
+              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-50"
+              aria-label="Delete log"
+              title="Delete log"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="mt-2 text-sm text-zinc-700">{log.analysis.insight}</div>
@@ -656,27 +840,32 @@ type Stats = {
   total: number;
   thisMonth: number;
   brainLoad: number;
-  redDays30d: number;
+  hitTotal7d: number;
+  baseline: number;
   daysSinceLast: number | null;
 };
 
-function computeStats(logs: ImpactLog[], now: Date): Stats {
+function computeStats(
+  logs: ImpactLog[],
+  now: Date,
+  baselineThreshold: number,
+): Stats {
   if (logs.length === 0) {
     return {
       total: 0,
       thisMonth: 0,
       brainLoad: 0,
-      redDays30d: 0,
+      hitTotal7d: 0,
+      baseline: baselineThreshold,
       daysSinceLast: null,
     };
   }
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
   let thisMonth = 0;
   let brainLoad = 0;
-  const redDays = new Set<string>();
+  let hitTotal7d = 0;
 
   for (const l of logs) {
     const t = new Date(l.created_at).getTime();
@@ -686,10 +875,7 @@ function computeStats(logs: ImpactLog[], now: Date): Stats {
     if (ageMs < sevenDaysMs && ageMs >= 0) {
       const daysAgo = ageMs / (24 * 60 * 60 * 1000);
       brainLoad += l.analysis.risk_score / (1 + daysAgo);
-    }
-
-    if (t >= thirtyDaysAgo && l.analysis.severity_color === "Red") {
-      redDays.add(dateKey(new Date(l.created_at)));
+      hitTotal7d += l.analysis.hit_sp_contribution ?? 0;
     }
   }
 
@@ -702,14 +888,13 @@ function computeStats(logs: ImpactLog[], now: Date): Stats {
     total: logs.length,
     thisMonth,
     brainLoad: Math.round(brainLoad * 10) / 10,
-    redDays30d: redDays.size,
+    hitTotal7d: Math.round(hitTotal7d * 10) / 10,
+    baseline: baselineThreshold,
     daysSinceLast,
   };
 }
 
 function buildBrainLoadSeries(logs: ImpactLog[]) {
-  // For each of the last 7 days, compute the rolling Brain Load AS OF the
-  // end of that day. This shows how the load has been trending.
   const today = new Date();
   today.setHours(23, 59, 59, 999);
 

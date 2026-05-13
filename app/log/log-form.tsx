@@ -9,10 +9,13 @@ import {
   INTENSITIES,
   FEELINGS,
   ACTIVITIES,
+  IMPACT_TYPES,
+  IMPACT_TYPE_LABELS,
   type Zone,
   type Intensity,
   type Feeling,
   type Activity,
+  type ImpactType,
   type ImpactLog,
 } from "@/lib/types";
 import { ResultView } from "./result-view";
@@ -22,13 +25,14 @@ const tile =
 const tileIdle = "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300";
 const tileActive = "border-zinc-900 bg-zinc-900 text-white shadow-sm";
 
-export function LogForm() {
+export function LogForm({ athleteId }: { athleteId: string }) {
   const [pending, startTransition] = useTransition();
 
   const [zone, setZone] = useState<Zone | null>(null);
   const [intensity, setIntensity] = useState<Intensity | null>(null);
   const [feelings, setFeelings] = useState<Feeling[]>([]);
   const [activity, setActivity] = useState<Activity | null>(null);
+  const [impactType, setImpactType] = useState<ImpactType | null>(null);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ImpactLog | null>(null);
@@ -39,13 +43,18 @@ export function LogForm() {
     );
   };
 
-  const canSubmit = zone !== null && intensity !== null && activity !== null;
+  const canSubmit =
+    zone !== null &&
+    intensity !== null &&
+    activity !== null &&
+    impactType !== null;
 
   const reset = () => {
     setZone(null);
     setIntensity(null);
     setFeelings([]);
     setActivity(null);
+    setImpactType(null);
     setNotes("");
     setError(null);
     setResult(null);
@@ -58,7 +67,9 @@ export function LogForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          athlete_id: athleteId,
           tags: { zone, intensity, feelings, activity },
+          impact_type: impactType,
           raw_text: notes,
         }),
       });
@@ -105,6 +116,25 @@ export function LogForm() {
             </button>
           ))}
         </Grid>
+      </Section>
+
+      <Section label="Impact vector">
+        <Grid cols={2}>
+          {IMPACT_TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setImpactType(t)}
+              className={`${tile} ${impactType === t ? tileActive : tileIdle}`}
+            >
+              {IMPACT_TYPE_LABELS[t]}
+            </button>
+          ))}
+        </Grid>
+        <p className="text-xs text-zinc-500">
+          Linear = straight-line contact (jab, helmet-to-helmet). Rotational =
+          glancing/whip (hook, cross to chin).
+        </p>
       </Section>
 
       <Section label="How do you feel? (select all that apply)">

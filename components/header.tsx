@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Activity,
   ClipboardPlus,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   UserRound,
@@ -20,7 +21,7 @@ export async function Header() {
     <header className="border-b border-zinc-200 bg-white">
       <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
         <Link
-          href="/log"
+          href="/dashboard"
           className="flex items-center gap-1.5 text-lg font-semibold tracking-tight"
         >
           <Activity className="size-5" aria-hidden />
@@ -36,8 +37,11 @@ export async function Header() {
           >
             Dashboard
           </NavLink>
-          <NavLink href="/profile" icon={<UserRound className="size-4" />}>
-            Profile
+          <NavLink href="/athlete" icon={<UserRound className="size-4" />}>
+            Athlete
+          </NavLink>
+          <NavLink href="/join" icon={<KeyRound className="size-4" />}>
+            Join
           </NavLink>
           {user ? (
             <form action={signOut}>
